@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Security.Cryptography.X509Certificates;
 
 class Program
 {
@@ -18,10 +19,33 @@ class Program
         BaseAddress = new Uri("https://secure-wms.com/"), // WMS API
     };
 
-    private static readonly HttpClient _secondVendorClient = new()
+    private static HttpClient _secondVendorClient;
+
+    static Program()
     {
-        BaseAddress = new Uri("https://api.secondvendor.com/"), // Replace with actual vendor URL
-    };
+        // Initialize INEXTO client with certificate authentication
+        try
+        {
+            // Load client certificate for INEXTO API
+            var cert = new X509Certificate2("path/to/your/certificate.p12", "!ZPeOE!65XfKd9Pi");
+            var handler = new HttpClientHandler();
+            handler.ClientCertificates.Add(cert);
+
+            _secondVendorClient = new HttpClient(handler)
+            {
+                BaseAddress = new Uri("https://secure-wms.com/") // Replace with actual INEXTO URL
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Could not load certificate: {ex.Message}");
+            // Fallback to regular HttpClient
+            _secondVendorClient = new HttpClient()
+            {
+                BaseAddress = new Uri("https://secure-wms.com/") // Replace with actual INEXTO URL
+            };
+        }
+    }
 
     static async Task Main(string[] args)
     {
@@ -83,8 +107,25 @@ class Program
             // Process the response and prepare data for second vendor
             var processedData = ProcessDataForSecondVendor(ordersResponse);
 
-            // Call second vendor's API with processed data
+            // Call second vendor's API with processed data (INEXTO)
             var finalResult = await CallSecondVendorApiAsync(processedData, authToken.AccessToken);
+
+            if (finalResult?.Status == 200)
+            {
+                Console.WriteLine($"✅ INEXTO shipment event sent successfully!");
+                Console.WriteLine($"Internal UID: {finalResult.InternalUid}");
+            }
+            else
+            {
+                Console.WriteLine($"❌ INEXTO API returned status: {finalResult?.Status}");
+                if (finalResult?.Errors?.Any() == true)
+                {
+                    foreach (var error in finalResult.Errors)
+                    {
+                        Console.WriteLine($"Error {error.Key}: {string.Join(", ", error.Value)}");
+                    }
+                }
+            }
 
             Console.WriteLine("Process completed successfully!");
         }
@@ -231,25 +272,133 @@ class Program
         }
     }
 
-    private static SecondVendorRequest ProcessDataForSecondVendor(OrdersResponse ordersResponse)
+    private static InextoShipmentRequest ProcessDataForSecondVendor(OrdersResponse ordersResponse)
     {
-        // TODO: Transform orders response into second vendor's request format
-        return new SecondVendorRequest
+        // Transform WMS orders into INEXTO shipment event format
+        var shipmentRequest = new InextoShipmentRequest();
+
+        if (ordersResponse?.Orders?.Any() == true)
         {
-            // Example: Map order data to second vendor format
-            // ProcessedOrders = ordersResponse.Orders?.Select(o => new ProcessedOrder { ... }).ToList()
-        };
+            var firstOrder = ordersResponse.Orders.First();
+
+            // Set basic event info
+            shipmentRequest.TransmissionUid = Guid.NewGuid().ToString();
+            shipmentRequest.EventDateTime = DateTime.UtcNow;
+            shipmentRequest.Key = GenerateInextoEventKey("Shipment", DateTime.UtcNow);
+            shipmentRequest.Comment = $"Shipment for order {firstOrder.ReadOnly?.OrderId}";
+
+            // Set scanning location from order data
+            shipmentRequest.ScanningLocation = new InextoBusinessEntity
+            {
+                Keys = new[] { "urn:inexto:tobacco:be:sc:wms.scanning_location" },
+                Code = "WMS_LOC",
+                Name = "WMS Scanning Location",
+                Country = "US" // Adjust based on your location
+            };
+
+            shipmentRequest.ScanningPoint = new InextoScanningPoint
+            {
+                Code = "SP001",
+                Description = "Primary scanning point"
+            };
+
+            // Set destination from shipping address
+            if (firstOrder.ShipTo != null)
+            {
+                shipmentRequest.BusinessEntities = new[]
+                {
+                    new InextoBusinessEntityWithRelation
+                    {
+                        Relation = "destination",
+                        Keys = new[] { "urn:inexto:tobacco:be:sc:wms.destination" },
+                        Code = "DEST_001",
+                        Name = firstOrder.ShipTo.CompanyName ?? firstOrder.ShipTo.Name ?? "Unknown",
+                        Country = firstOrder.ShipTo.Country ?? "US",
+                        Address1 = firstOrder.ShipTo.Address1,
+                        City = firstOrder.ShipTo.City,
+                        State = firstOrder.ShipTo.State,
+                        Zip = firstOrder.ShipTo.Zip
+                    }
+                };
+            }
+
+            // Convert order items to INEXTO items format
+            var orderItems = firstOrder.Embedded?.OrderItems;
+            if (orderItems?.Any() == true)
+            {
+                shipmentRequest.Items = orderItems.Select(item => new InextoItem
+                {
+                    MachineReadableCode = $"01{item.ItemIdentifier?.Sku ?? "unknown"}21{DateTime.Now:yyMMdd}"
+                }).ToArray();
+
+                // Example usage:
+                var documentUid = $"urn:inexto:tobacco:doc:dn:uid:WMS.{(firstOrder.ReadOnly != null ? firstOrder.ReadOnly.OrderId.ToString() : "unknown")}";
+            }
+
+            // Add properties for destination type and event date
+            shipmentRequest.Properties = new[]
+            {
+                new InextoProperty
+                {
+                    Key = "urn:inexto:core:mda:destinationType",
+                    Value = "2" // EU destination other than VM – fixed quantity delivery
+                },
+                new InextoProperty
+                {
+                    Key = "urn:inexto:core:mda:eventDateTime",
+                    Value = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz")
+                }
+            };
+        }
+
+        return shipmentRequest;
     }
 
-    private static async Task<SecondVendorResponse> CallSecondVendorApiAsync(SecondVendorRequest request, string accessToken)
+    private static string GenerateInextoEventKey(string eventType, DateTime eventDateTime)
     {
-        // Add authentication header
-        _secondVendorClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var dateTimeString = eventDateTime.ToString("yyyyMMdd-HHmmsszzz").Replace(":", "");
+        return $"urn:inexto:id:evt:tobacco:std:{eventType}.ADD.{dateTimeString}.wms001.WMSLOC001";
+    }
 
-        var response = await _secondVendorClient.PostAsJsonAsync("endpoint", request); // Replace with actual endpoint
-        response.EnsureSuccessStatusCode();
+    private static async Task<InextoShipmentResponse> CallSecondVendorApiAsync(InextoShipmentRequest request, string accessToken)
+    {
+        try
+        {
+            // Add INEXTO API headers
+            _secondVendorClient.DefaultRequestHeaders.Clear();
+            _secondVendorClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", "a754b9e5ee024362b5cc4c52c54e3c72");
 
-        return await response.Content.ReadFromJsonAsync<SecondVendorResponse>();
+            Console.WriteLine("Sending shipment event to INEXTO...");
+            Console.WriteLine($"Event Key: {request.Key}");
+            Console.WriteLine($"Destination: {request.BusinessEntities?.FirstOrDefault()?.Name}");
+            Console.WriteLine($"Items Count: {request.Items?.Length ?? 0}");
+
+            var response = await _secondVendorClient.PostAsJsonAsync("standard/event/shipmentEvent", request);
+            response.EnsureSuccessStatusCode();
+
+            var jsonResponse = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"INEXTO Response: {jsonResponse}");
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            return JsonSerializer.Deserialize<InextoShipmentResponse>(jsonResponse, options);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallSecondVendorApiAsync: {ex}");
+            return new InextoShipmentResponse
+            {
+                Status = -1,
+                Errors = new Dictionary<string, string[]>
+                {
+                    { "Exception", new[] { ex.ToString() } }
+                }
+            };
+        }
     }
 }
 
@@ -537,18 +686,123 @@ public class ItemIdentifier
     public int Id { get; set; }
 }
 
-// TODO: Replace these with your actual response/request models
-public class FirstVendorResponse
+// INEXTO API Models for Shipment Event
+public class InextoShipmentRequest
 {
-    // Legacy - use OrdersResponse instead
+    [JsonPropertyName("transmissionUid")]
+    public string TransmissionUid { get; set; }
+
+    [JsonPropertyName("key")]
+    public string Key { get; set; }
+
+    [JsonPropertyName("eventDateTime")]
+    public DateTime EventDateTime { get; set; }
+
+    [JsonPropertyName("comment")]
+    public string Comment { get; set; }
+
+    [JsonPropertyName("properties")]
+    public InextoProperty[] Properties { get; set; }
+
+    [JsonPropertyName("coordinates")]
+    public InextoCoordinates Coordinates { get; set; }
+
+    [JsonPropertyName("documents")]
+    public string[] Documents { get; set; }
+
+    [JsonPropertyName("scanningLocation")]
+    public InextoBusinessEntity ScanningLocation { get; set; }
+
+    [JsonPropertyName("scanningPoint")]
+    public InextoScanningPoint ScanningPoint { get; set; }
+
+    [JsonPropertyName("businessEntities")]
+    public InextoBusinessEntityWithRelation[] BusinessEntities { get; set; }
+
+    [JsonPropertyName("items")]
+    public InextoItem[] Items { get; set; }
 }
 
-public class SecondVendorRequest
+public class InextoBusinessEntity
 {
-    // Add properties needed for second vendor's API request
+    [JsonPropertyName("keys")]
+    public string[] Keys { get; set; }
+
+    [JsonPropertyName("code")]
+    public string Code { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
+
+    [JsonPropertyName("country")]
+    public string Country { get; set; }
+
+    [JsonPropertyName("properties")]
+    public InextoProperty[] Properties { get; set; }
 }
 
-public class SecondVendorResponse
+public class InextoBusinessEntityWithRelation : InextoBusinessEntity
 {
-    // Add properties based on second vendor's API response
+    [JsonPropertyName("relation")]
+    public string Relation { get; set; }
+
+    [JsonPropertyName("address1")]
+    public string Address1 { get; set; }
+
+    [JsonPropertyName("city")]
+    public string City { get; set; }
+
+    [JsonPropertyName("state")]
+    public string State { get; set; }
+
+    [JsonPropertyName("zip")]
+    public string Zip { get; set; }
+}
+
+public class InextoScanningPoint
+{
+    [JsonPropertyName("code")]
+    public string Code { get; set; }
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; }
+}
+
+public class InextoItem
+{
+    [JsonPropertyName("machineReadableCode")]
+    public string MachineReadableCode { get; set; }
+}
+
+public class InextoProperty
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; }
+
+    [JsonPropertyName("value")]
+    public string Value { get; set; }
+}
+
+public class InextoCoordinates
+{
+    [JsonPropertyName("latitude")]
+    public double Latitude { get; set; }
+
+    [JsonPropertyName("longitude")]
+    public double Longitude { get; set; }
+}
+
+public class InextoShipmentResponse
+{
+    [JsonPropertyName("transmissionUid")]
+    public string TransmissionUid { get; set; }
+
+    [JsonPropertyName("internalUid")]
+    public string InternalUid { get; set; }
+
+    [JsonPropertyName("status")]
+    public int Status { get; set; }
+
+    [JsonPropertyName("errors")]
+    public Dictionary<string, string[]> Errors { get; set; }
 }
