@@ -128,8 +128,87 @@ class Program
             }
         };
 
-        var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
-        Console.WriteLine($"Test API result status: {testResult?.Status}");
+        // Map each order to an InextoShipmentRequest and send to INEXTO
+        if (ordersResponse?.Orders?.Any() == true)
+        {
+            foreach (var order in ordersResponse.Orders)
+            {
+                var shipmentRequest = MapOrderToInextoShipmentRequest(order);
+
+                if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
+
+                var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
+                Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
+            }
+        }
+
+        // Uncomment below to test with hardcoded dummy shipment
+         var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
+         //Console.WriteLine($"Test API result status: {testResult?.Status}");
+    }
+
+    private static InextoShipmentRequest MapOrderToInextoShipmentRequest(Order order)
+    {
+        // Map Order to InextoShipmentRequest
+        var shipmentRequest = new InextoShipmentRequest
+        {
+            TransmissionUid = Guid.NewGuid().ToString(),
+            Key = $"urn:inexto:id:evt:tobacco:std:Shipment.ADD.{DateTime.UtcNow:yyyyMMdd-HHmmsszzz}.wms001.WMSLOC001",
+            EventDateTime = DateTime.UtcNow,
+            Comment = $"Shipment for order {order.ReadOnly?.OrderId}",
+            Documents = new[]
+            {
+                $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{order.ReadOnly?.OrderId}"
+            },
+            ScanningLocation = new InextoBusinessEntity
+            {
+                Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
+                Code = "USID1",
+                Name = "Nampa Specialty Fulfillment Center",
+                Country = "US"
+            },
+            ScanningPoint = new InextoScanningPoint
+            {
+                Code = "SP001",
+                Description = "Primary scanning point"
+            },
+            BusinessEntities = order.ShipTo != null
+                ? new[]
+                {
+                    new InextoBusinessEntityWithRelation
+                    {
+                        Relation = "destination",
+                        Keys = new[] { "urn:inexto:tobacco:be:sc:SMDFO.123456" }, //should be smdfo, stock owner?
+                        Code = "SMDFO.123456",
+                        Name = order.ShipTo.CompanyName ?? order.ShipTo.Name ?? "Unknown",
+                        Country = order.ShipTo.Country ?? "US",
+                        Address1 = order.ShipTo.Address1,
+                        City = order.ShipTo.City,
+                        State = order.ShipTo.State,
+                        Zip = order.ShipTo.Zip
+                    }
+                }
+                : null,
+            //temp hard code
+            Items = new[]
+            {
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" }
+            },
+            //Items = order.Embedded?.OrderItems?.Select(item => new InextoItem
+            //{
+            //    MachineReadableCode = $"01{item.ItemIdentifier?.Sku ?? "unknown"}21{DateTime.UtcNow:yyMMdd}"
+            //}).ToArray(),
+            Properties = new[]
+            {
+                new InextoProperty
+                {
+                    Key = "urn:inexto:core:mda:eventDateTime",
+                    Value = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz") //use transaction uid w/ timezone -7
+                }
+            }
+        };
+
+        return shipmentRequest;
     }
 
     private static HttpClient CreateInextoHttpClient()

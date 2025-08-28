@@ -23,7 +23,7 @@ public class WmsAuthService : IWmsAuthService
             grant_type = "client_credentials"
         };
 
-        string credentials = "a2c80ff1-7ce3-422e-987a-d899f3e03641:v1qLTJ2+yRuJa0UfCDK7FPUavf25cAMp";
+        string credentials = "880441af-0cbe-409c-bcae-dff97f4c6da7:ZDxx3FlpQ+7VvWrB55EM2z/8VaMcIhh0";
         byte[] encodedBytes = System.Text.Encoding.UTF8.GetBytes(credentials);
         string encodedCredentials = System.Convert.ToBase64String(encodedBytes);
 

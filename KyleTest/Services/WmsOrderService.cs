@@ -18,12 +18,22 @@ public class WmsOrderService : IWmsOrderService
     {
         _orderClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
+        // Calculate the past 24 hours window in ISO 8601 format (UTC)
+        var now = DateTime.UtcNow;
+        var from = now.AddHours(-72);
+        string fromStr = from.ToString("yyyy-MM-ddTHH:mm:ss");
+        string toStr = now.ToString("yyyy-MM-ddTHH:mm:ss");
+
+        // Build RQL for shipped orders in the past 24 hours
+        var rql = $"readonly.processDate=gt={fromStr};readonly.processDate=lt={toStr}";
+
         var queryParams = new[]
         {
             "pgsiz=100",
             "pgnum=1",
-            "detail=OrderItems",
-            "itemdetail=None"
+            $"rql={rql}",
+            "detail=All",
+            "itemdetail=All"
         };
 
         var endpoint = "orders?" + string.Join("&", queryParams);
