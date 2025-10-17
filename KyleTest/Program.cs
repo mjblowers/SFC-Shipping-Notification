@@ -61,35 +61,33 @@ class Program
                         Console.WriteLine($"    - Package ID: {package.PackageId}, Tracking: {package.TrackingNumber}, Weight: {package.Weight}");
                     }
                 }
-            }
-        }
 
-        // Hardcoded dummy InextoShipmentRequest for API testing
-        var testShipmentRequest = new InextoShipmentRequest
-        {
-            TransmissionUid = "WMSPNSUS1234567891",
-            Key = "urn:inexto:id:evt:tobacco:std:Shipment.ADD.20250813-143000+0000.WMSPNSUS.USID1",
-            EventDateTime = DateTime.Parse("2025-08-13T14:30:00+00:00"),
-            Documents = new[] { "urn:inexto:tobacco:doc:dn:uid:SMDFO.1234567891" },
-            ScanningLocation = new InextoBusinessEntity
-            {
-                Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
-                Code = "USID1",
-                Name = "Nampa Specialty Fulfillment Center",
-                Country = "US",
-                Properties = new[]
+                // Hardcoded dummy InextoShipmentRequest for API testing
+                var testShipmentRequest = new InextoShipmentRequest
                 {
+                    TransmissionUid = "WMSPNSUS1234567891",
+                    Key = "urn:inexto:id:evt:tobacco:std:Shipment.ADD.20250813-143000+0000.WMSPNSUS.USID1.SMDFO.",
+                    EventDateTime = DateTime.Parse("2025-08-13T14:30:00+00:00"),
+                    Documents = new[] { "urn:inexto:tobacco:doc:dn:uid:SMDFO.1234567891" },
+                    ScanningLocation = new InextoBusinessEntity
+                    {
+                        Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
+                        Code = "USID1",
+                        Name = "Nampa Specialty Fulfillment Center",
+                        Country = "US",
+                        Properties = new[]
+                        {
                     new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
                     new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
                 }
-            },
-            ScanningPoint = new InextoScanningPoint
-            {
-                Code = "USID1",
-                Description = "Nampa Specialty Fulfillment Center"
-            },
-            BusinessEntities = new[]
-            {
+                    },
+                    ScanningPoint = new InextoScanningPoint
+                    {
+                        Code = "USID1",
+                        Description = "Nampa Specialty Fulfillment Center"
+                    },
+                    BusinessEntities = new[]
+                    {
                 new InextoBusinessEntityWithRelation
                 {
                     Relation = "destination",
@@ -107,14 +105,14 @@ class Program
                     }
                 }
             },
-            Items = new[]
-            {
+                    Items = new[]
+                    {
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" },
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164103240NP000240.0010U2-0024001" },
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164104240NP000240.0010U2-0024001" }
             },
-            Properties = new[]
-            {
+                    Properties = new[]
+                    {
                 new InextoProperty
                 {
                     Key = "urn:inexto:core:mda:destinationType",
@@ -123,29 +121,106 @@ class Program
                 new InextoProperty
                 {
                     Key = "urn:inexto:core:mda:eventDateTime",
-                    Value = "2025-08-13T14:30:00+00:00"
+                    Value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
                 }
             }
-        };
+                };
 
-        // Map each order to an InextoShipmentRequest and send to INEXTO
-        if (ordersResponse?.Orders?.Any() == true)
-        {
-            foreach (var order in ordersResponse.Orders)
-            {
                 var shipmentRequest = MapOrderToInextoShipmentRequest(order);
 
                 if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
 
                 var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
                 Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
+
+                // Uncomment below to test with hardcoded dummy shipment
+                var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
+                //Console.WriteLine($"Test API result status: {testResult?.Status}");
             }
         }
-
-        // Uncomment below to test with hardcoded dummy shipment
-         var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
-         //Console.WriteLine($"Test API result status: {testResult?.Status}");
     }
+
+    //// Hardcoded dummy InextoShipmentRequest for API testing
+    //var testShipmentRequest = new InextoShipmentRequest
+    //{
+    //    TransmissionUid = "WMSPNSUS1234567891",
+    //    Key = "urn:inexto:id:evt:tobacco:std:Shipment.ADD.20250813-143000+0000.WMSPNSUS.USID1.SMDFO.",
+    //    EventDateTime = DateTime.Parse("2025-08-13T14:30:00+00:00"),
+    //    Documents = new[] { "urn:inexto:tobacco:doc:dn:uid:SMDFO.1234567891" },
+    //    ScanningLocation = new InextoBusinessEntity
+    //    {
+    //        Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
+    //        Code = "USID1",
+    //        Name = "Nampa Specialty Fulfillment Center",
+    //        Country = "US",
+    //        Properties = new[]
+    //        {
+    //            new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
+    //            new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
+    //        }
+    //    },
+    //    ScanningPoint = new InextoScanningPoint
+    //    {
+    //        Code = "USID1",
+    //        Description = "Nampa Specialty Fulfillment Center"
+    //    },
+    //    BusinessEntities = new[]
+    //    {
+    //        new InextoBusinessEntityWithRelation
+    //        {
+    //            Relation = "destination",
+    //            Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.2309" },
+    //            Code = "2309",
+    //            Name = "SWEDISH MATCH NORTH AMERICA LLC",
+    //            Country = "US",
+    //            Address1 = "1021 EAST CARY STREET, SUITE 1600",
+    //            City = "RICHMOND",
+    //            Zip = "23219",
+    //            Properties = new[]
+    //            {
+    //                new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000002" },
+    //                new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000002" }
+    //            }
+    //        }
+    //    },
+    //    Items = new[]
+    //    {
+    //        new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" },
+    //        new InextoItem { MachineReadableCode = "01006092499075232100250813U201164103240NP000240.0010U2-0024001" },
+    //        new InextoItem { MachineReadableCode = "01006092499075232100250813U201164104240NP000240.0010U2-0024001" }
+    //    },
+    //    Properties = new[]
+    //    {
+    //        new InextoProperty
+    //        {
+    //            Key = "urn:inexto:core:mda:destinationType",
+    //            Value = "2"
+    //        },
+    //        new InextoProperty
+    //        {
+    //            Key = "urn:inexto:core:mda:eventDateTime",
+    //            Value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
+    //        }
+    //    }
+    //};
+
+    //// Map each order to an InextoShipmentRequest and send to INEXTO
+    //if (ordersResponse?.Orders?.Any() == true)
+    //{
+    //    foreach (var order in ordersResponse.Orders)
+    //    {
+    //        var shipmentRequest = MapOrderToInextoShipmentRequest(order);
+
+    //        if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
+
+    //        var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
+    //        Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
+    //    }
+    //}
+
+    //// Uncomment below to test with hardcoded dummy shipment
+    // var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
+    // //Console.WriteLine($"Test API result status: {testResult?.Status}");
 
     private static InextoShipmentRequest MapOrderToInextoShipmentRequest(Order order)
     {
