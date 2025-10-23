@@ -61,25 +61,27 @@ class Program
                         Console.WriteLine($"    - Package ID: {package.PackageId}, Tracking: {package.TrackingNumber}, Weight: {package.Weight}");
                     }
                 }
-
+                var dateTimeNow = DateTime.UtcNow;
+                var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
+                var eventUid = "WMS" + Guid.NewGuid().ToString();
                 // Hardcoded dummy InextoShipmentRequest for API testing
                 var testShipmentRequest = new InextoShipmentRequest
                 {
-                    TransmissionUid = "WMSPNSUS1234567891",
-                    Key = "urn:inexto:id:evt:tobacco:std:Shipment.ADD.20250813-143000+0000.WMSPNSUS.USID1.SMDFO.",
-                    EventDateTime = DateTime.Parse("2025-08-13T14:30:00+00:00"),
-                    Documents = new[] { "urn:inexto:tobacco:doc:dn:uid:SMDFO.1234567891" },
+                    TransmissionUid = $"WMSPNSUS"+ eventUid,
+                    Key = $"urn:inexto:id:evt:tobacco:std:SHIPMENT.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.1BL0238617",
+                    EventDateTime = dateTimeNow,
+                    Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{eventUid}" },
                     ScanningLocation = new InextoBusinessEntity
                     {
                         Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
                         Code = "USID1",
                         Name = "Nampa Specialty Fulfillment Center",
                         Country = "US",
-                        Properties = new[]
-                        {
-                    new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
-                    new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
-                }
+                //        Properties = new[]
+                //        {
+                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
+                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
+                //}
                     },
                     ScanningPoint = new InextoScanningPoint
                     {
@@ -103,7 +105,19 @@ class Program
                         new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000002" },
                         new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000002" }
                     }
-                }
+                },
+                new InextoBusinessEntityWithRelation
+                    {
+                        Relation = "stockowner",
+                        Keys = new[] { "rn:inexto:tobacco:be:sc:SMDFO.NA01" }, //should be smdfo, stock owner?
+                        Code = "NA01",
+                        Name = "Swedish Match North America LLC" ?? order.ShipTo.Name ?? "Unknown",
+                        Country = order.ShipTo.Country ?? "US",
+                        Address1 = "1021 E CARY ST, SUITE 1600",
+                        City = "RICHMOND",
+                        State = order.ShipTo.State,
+                        Zip = "23219"
+                    }
             },
                     Items = new[]
                     {
@@ -130,8 +144,8 @@ class Program
 
                 if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
 
-                var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
-                Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
+                //var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
+                //Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
 
                 // Uncomment below to test with hardcoded dummy shipment
                 var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
@@ -225,16 +239,20 @@ class Program
     private static InextoShipmentRequest MapOrderToInextoShipmentRequest(Order order)
     {
         // Map Order to InextoShipmentRequest
+        var dateTimeNow = DateTime.UtcNow;
+        var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
+        var eventUid = "WMS" + Guid.NewGuid().ToString();
         var shipmentRequest = new InextoShipmentRequest
         {
-            TransmissionUid = Guid.NewGuid().ToString(),
-            Key = $"urn:inexto:id:evt:tobacco:std:Shipment.ADD.{DateTime.UtcNow:yyyyMMdd-HHmmsszzz}.wms001.WMSLOC001",
-            EventDateTime = DateTime.UtcNow,
-            Comment = $"Shipment for order {order.ReadOnly?.OrderId}",
-            Documents = new[]
-            {
-                $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{order.ReadOnly?.OrderId}"
-            },
+            TransmissionUid = eventUid,
+            Key = $"urn:inexto:id:evt:tobacco:std:Shipment.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.",
+            EventDateTime = dateTimeNow,
+            //Comment = $"Shipment for order {order.ReadOnly?.OrderId}",
+            //Documents = new[]
+            //{
+            //    $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{order.ReadOnly?.OrderId}"
+            //},
+            Documents = new[] { "urn:inexto:tobacco:doc:dn:uid:SMDFO.1234567891" },
             ScanningLocation = new InextoBusinessEntity
             {
                 Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
@@ -252,22 +270,24 @@ class Program
                 {
                     new InextoBusinessEntityWithRelation
                     {
-                        Relation = "destination",
-                        Keys = new[] { "urn:inexto:tobacco:be:sc:SMDFO.123456" }, //should be smdfo, stock owner?
-                        Code = "SMDFO.123456",
-                        Name = order.ShipTo.CompanyName ?? order.ShipTo.Name ?? "Unknown",
+                        Relation = "stockowner",
+                        Keys = new[] { "rn:inexto:tobacco:be:sc:SMDFO.NA01" }, //should be smdfo, stock owner?
+                        Code = "NA01",
+                        Name = "Swedish Match North America LLC" ?? order.ShipTo.Name ?? "Unknown",
                         Country = order.ShipTo.Country ?? "US",
-                        Address1 = order.ShipTo.Address1,
-                        City = order.ShipTo.City,
+                        Address1 = "1021 E CARY ST, SUITE 1600",
+                        City = "RICHMOND",
                         State = order.ShipTo.State,
-                        Zip = order.ShipTo.Zip
+                        Zip = "23219"
                     }
                 }
                 : null,
             //temp hard code
             Items = new[]
-            {
-                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" }
+                    {
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" },
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164103240NP000240.0010U2-0024001" },
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164104240NP000240.0010U2-0024001" }
             },
             //Items = order.Embedded?.OrderItems?.Select(item => new InextoItem
             //{
@@ -277,8 +297,20 @@ class Program
             {
                 new InextoProperty
                 {
+                    Key = "urn:inexto:core:mda:destinationType",
+                    Value = "2"
+                },
+                new InextoProperty
+                {
                     Key = "urn:inexto:core:mda:eventDateTime",
-                    Value = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz") //use transaction uid w/ timezone -7
+                    Value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
+                },
+                new InextoProperty
+                {
+                    //Key = "urn:inexto:core:mda:eventDateTime",
+                    //Value = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz") //use transaction uid w/ timezone -7
+                    Key = $"urn:inexto:tobacco:backward:{eventUid}",
+                    Value = $"{dateTimeNow}.USID1.SMDFO.1BL0238617"
                 }
             }
         };
