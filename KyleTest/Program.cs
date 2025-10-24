@@ -61,7 +61,8 @@ class Program
                         Console.WriteLine($"    - Package ID: {package.PackageId}, Tracking: {package.TrackingNumber}, Weight: {package.Weight}");
                     }
                 }
-                var dateTimeNow = DateTime.UtcNow;
+                var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
+                var dateTimeNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, mountainTimeZone);
                 var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
                 var eventUid = "WMS" + Guid.NewGuid().ToString();
                 // Hardcoded dummy InextoShipmentRequest for API testing
@@ -70,7 +71,7 @@ class Program
                     TransmissionUid = $"WMSPNSUS"+ eventUid,
                     Key = $"urn:inexto:id:evt:tobacco:std:SHIPMENT.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.1BL0238617",
                     EventDateTime = dateTimeNow,
-                    Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{eventUid}" },
+                    Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.1BL0238617" },
                     ScanningLocation = new InextoBusinessEntity
                     {
                         Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
@@ -99,23 +100,17 @@ class Program
                     Country = "US",
                     Address1 = "1021 EAST CARY STREET, SUITE 1600",
                     City = "RICHMOND",
-                    Zip = "23219",
-                    Properties = new[]
-                    {
-                        new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000002" },
-                        new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000002" }
-                    }
+                    Zip = "23219"
                 },
                 new InextoBusinessEntityWithRelation
                     {
                         Relation = "stockowner",
-                        Keys = new[] { "rn:inexto:tobacco:be:sc:SMDFO.NA01" }, //should be smdfo, stock owner?
+                        Keys = new[] { "urn:inexto:tobacco:be:sc:SMDFO.NA01" }, //should be smdfo, stock owner?
                         Code = "NA01",
                         Name = "Swedish Match North America LLC" ?? order.ShipTo.Name ?? "Unknown",
                         Country = order.ShipTo.Country ?? "US",
                         Address1 = "1021 E CARY ST, SUITE 1600",
                         City = "RICHMOND",
-                        State = order.ShipTo.State,
                         Zip = "23219"
                     }
             },
@@ -130,7 +125,7 @@ class Program
                 new InextoProperty
                 {
                     Key = "urn:inexto:core:mda:destinationType",
-                    Value = "2"
+                    Value = "1"
                 },
                 new InextoProperty
                 {
