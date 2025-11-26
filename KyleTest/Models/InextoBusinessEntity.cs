@@ -18,4 +18,14 @@ public class InextoBusinessEntity
 
     [JsonPropertyName("properties")]
     public InextoProperty[] Properties { get; set; }
+    
+    [JsonPropertyName("address1")]
+    public string Address1 { get; set; }
+    
+    [JsonPropertyName("city")]
+    public string City { get; set; }
+    
+    [JsonPropertyName("zip")]
+    public string Zip { get; set; }
+
 }

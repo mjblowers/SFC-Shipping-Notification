@@ -9,11 +9,13 @@ class Program
         // Setup HttpClients
         var authClient = new HttpClient { BaseAddress = new Uri("https://secure-wms.com/") };
         var orderClient = new HttpClient { BaseAddress = new Uri("https://secure-wms.com/") };
+        var receiverClient = new HttpClient { BaseAddress = new Uri("https://secure-wms.com/") };
         var inextoClient = CreateInextoHttpClient();
 
         // Setup services
         var authService = new WmsAuthService(authClient);
         var orderService = new WmsOrderService(orderClient);
+        var receiverService = new WmsReceiverService(receiverClient);
         var inextoService = new InextoApiService(inextoClient);
 
         // Authenticate
@@ -24,78 +26,115 @@ class Program
             return;
         }
         Console.WriteLine("Authentication successful!");
-
-        // Get orders
-        var ordersResponse = await orderService.GetOrdersAsync(authToken.AccessToken);
-        Console.WriteLine($"Retrieved {ordersResponse?.Orders?.Count ?? 0} orders");
-
-        // Display some order details for verification
-        if (ordersResponse?.Orders?.Any() == true)
+        var amReceiving = true;
+        if (amReceiving)
         {
-            foreach (var order in ordersResponse.Orders.Take(3))
+            var receiversResponse = await receiverService.GetReceiversAsync(authToken.AccessToken);
+            Console.WriteLine($"Retrieved {receiversResponse?.Receivers?.Count ?? 0} receivers");
+
+            // Display some receiver details for verification
+            if (receiversResponse?.Receivers?.Any() == true)
             {
-                Console.WriteLine($"\nOrder Details:");
-                Console.WriteLine($"  Order ID: {order.ReadOnly?.OrderId}");
-                Console.WriteLine($"  Reference: {order.ReferenceNum}");
-                Console.WriteLine($"  Description: {order.Description}");
-                Console.WriteLine($"  Status: {order.ReadOnly?.Status}");
-                Console.WriteLine($"  Is Closed: {order.ReadOnly?.IsClosed}");
-                Console.WriteLine($"  Ship To: {order.ShipTo?.CompanyName} - {order.ShipTo?.City}, {order.ShipTo?.State}");
-
-                var orderItems = order.Embedded?.OrderItems;
-                if (orderItems?.Any() == true)
+                foreach (var receiver in receiversResponse.Receivers.Take(3))
                 {
-                    Console.WriteLine($"  Order Items ({orderItems.Count}):");
-                    foreach (var item in orderItems.Take(2))
+                    Console.WriteLine($"\nReceiver Details:");
+                    Console.WriteLine($"  Receiver ID: {receiver.ReadOnly?.ReceiverId}");
+                    Console.WriteLine($"  Reference: {receiver.ReferenceNum}");
+                    Console.WriteLine($"  Description: {receiver.Description}");
+                    Console.WriteLine($"  Status: {receiver.ReadOnly?.Status}");
+                    Console.WriteLine($"  Is Closed: {receiver.ReadOnly?.IsClosed}");
+                    Console.WriteLine($"  Ship From: {receiver.ShipFrom?.CompanyName} - {receiver.ShipFrom?.City}, {receiver.ShipFrom?.State}");
+
+                    var receiverItems = receiver.Embedded?.ReceiverItems;
+                    if (receiverItems?.Any() == true)
                     {
-                        Console.WriteLine($"    - SKU: {item.ItemIdentifier?.Sku}, Qty: {item.Qty}, Price: {item.FulfillInvSalePrice:C}");
+                        Console.WriteLine($"  Receiver Items ({receiverItems.Count}):");
+                        foreach (var item in receiverItems.Take(2))
+                        {
+                            Console.WriteLine($"    - SKU: {item.ItemIdentifier?.Sku}, Qty: {item.Qty}");
+                        }
                     }
                 }
+            }
+        }
+        // Get orders
+        if (!amReceiving)
+        {
+            var ordersResponse = await orderService.GetOrdersAsync(authToken.AccessToken);
+            Console.WriteLine($"Retrieved {ordersResponse?.Orders?.Count ?? 0} orders");
 
-                var packages = order.ReadOnly?.Packages;
-                if (packages?.Any() == true)
+            // Display some order details for verification
+            if (ordersResponse?.Orders?.Any() == true)
+            {
+                foreach (var order in ordersResponse.Orders.Take(3))
                 {
-                    Console.WriteLine($"  Packages ({packages.Count}):");
-                    foreach (var package in packages.Take(2))
+                    Console.WriteLine($"\nOrder Details:");
+                    Console.WriteLine($"  Order ID: {order.ReadOnly?.OrderId}");
+                    Console.WriteLine($"  Reference: {order.ReferenceNum}");
+                    Console.WriteLine($"  Description: {order.Description}");
+                    Console.WriteLine($"  Status: {order.ReadOnly?.Status}");
+                    Console.WriteLine($"  Is Closed: {order.ReadOnly?.IsClosed}");
+                    Console.WriteLine($"  Ship To: {order.ShipTo?.CompanyName} - {order.ShipTo?.City}, {order.ShipTo?.State}");
+
+                    var orderItems = order.Embedded?.OrderItems;
+                    if (orderItems?.Any() == true)
                     {
-                        Console.WriteLine($"    - Package ID: {package.PackageId}, Tracking: {package.TrackingNumber}, Weight: {package.Weight}");
+                        Console.WriteLine($"  Order Items ({orderItems.Count}):");
+                        foreach (var item in orderItems.Take(2))
+                        {
+                            Console.WriteLine($"    - SKU: {item.ItemIdentifier?.Sku}, Qty: {item.Qty}, Price: {item.FulfillInvSalePrice:C}");
+                        }
                     }
-                }
-                var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
-                var dateTimeNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, mountainTimeZone);
-                var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
-                var eventUid = "WMS" + Guid.NewGuid().ToString();
-                // Hardcoded dummy InextoShipmentRequest for API testing
-                var testShipmentRequest = new InextoShipmentRequest
-                {
-                    TransmissionUid = $"WMSPNSUS"+ eventUid,
-                    Key = $"urn:inexto:id:evt:tobacco:std:SHIPMENT.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.1BL0238617",
-                    EventDateTime = dateTimeNow,
-                    Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.1BL0238617" },
-                    ScanningLocation = new InextoBusinessEntity
+
+                    var packages = order.ReadOnly?.Packages;
+                    if (packages?.Any() == true)
                     {
-                        Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
-                        Code = "USID1",
-                        Name = "Nampa Specialty Fulfillment Center",
-                        Country = "US",
-                //        Properties = new[]
-                //        {
-                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
-                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
-                //}
-                    },
-                    ScanningPoint = new InextoScanningPoint
+                        Console.WriteLine($"  Packages ({packages.Count}):");
+                        foreach (var package in packages.Take(2))
+                        {
+                            Console.WriteLine($"    - Package ID: {package.PackageId}, Tracking: {package.TrackingNumber}, Weight: {package.Weight}");
+                        }
+                    }
+                    var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
+
+                    var dateTimeNow = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, mountainTimeZone);
+
+                    var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
+                    var eventUid = "WMS" + Guid.NewGuid().ToString();
+                    // Hardcoded dummy InextoShipmentRequest for API testing
+                    var testShipmentRequest = new InextoShipmentRequest
                     {
-                        Code = "USID1",
-                        Description = "Nampa Specialty Fulfillment Center"
-                    },
-                    BusinessEntities = new[]
-                    {
+                        TransmissionUid = $"WMSPNSUS" + eventUid,
+                        Key = $"urn:inexto:id:evt:tobacco:std:SHIPMENT.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.1BL0238617",
+                        EventDateTime = dateTimeNow,
+                        Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.1BL0238617" },
+                        ScanningLocation = new InextoBusinessEntity
+                        {
+                            Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
+                            Code = "USID1",
+                            Name = "Specialty Fulfillment Center",
+                            Country = "US",
+                            Address1 = "Specialty Fulfillment Center Swedish Match 3 - 17th Avenue South",
+                            Zip = "83651",
+                            City = "Nampa"
+                            //        Properties = new[]
+                            //        {
+                            //    new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
+                            //    new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
+                            //}
+                        },
+                        ScanningPoint = new InextoScanningPoint
+                        {
+                            Code = "USID1",
+                            Description = "Nampa Specialty Fulfillment Center"
+                        },
+                        BusinessEntities = new[]
+                        {
                 new InextoBusinessEntityWithRelation
                 {
                     Relation = "destination",
-                    Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.2309" },
-                    Code = "2309",
+                    Keys = new[] { "urn:inexto:tobacco:be:sc:SMDNFO.002290001" },
+                    Code = "002290001",
                     Name = "SWEDISH MATCH NORTH AMERICA LLC",
                     Country = "US",
                     Address1 = "1021 EAST CARY STREET, SUITE 1600",
@@ -114,14 +153,14 @@ class Program
                         Zip = "23219"
                     }
             },
-                    Items = new[]
-                    {
+                        Items = new[]
+                        {
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" },
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164103240NP000240.0010U2-0024001" },
                 new InextoItem { MachineReadableCode = "01006092499075232100250813U201164104240NP000240.0010U2-0024001" }
             },
-                    Properties = new[]
-                    {
+                        Properties = new[]
+                        {
                 new InextoProperty
                 {
                     Key = "urn:inexto:core:mda:destinationType",
@@ -133,18 +172,19 @@ class Program
                     Value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
                 }
             }
-                };
+                    };
 
-                var shipmentRequest = MapOrderToInextoShipmentRequest(order);
+                    var shipmentRequest = MapOrderToInextoShipmentRequest(order);
 
-                if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
+                    if (shipmentRequest.Items == null || shipmentRequest.Items.Count() <= 0) continue;
 
-                //var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
-                //Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
+                    //var result = await inextoService.SendShipmentEventAsync(shipmentRequest, authToken.AccessToken);
+                    //Console.WriteLine($"Order {order.ReadOnly?.OrderId} INEXTO API result status: {result?.Status}");
 
-                // Uncomment below to test with hardcoded dummy shipment
-                var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
-                //Console.WriteLine($"Test API result status: {testResult?.Status}");
+                    // Uncomment below to test with hardcoded dummy shipment
+                    var testResult = await inextoService.SendShipmentEventAsync(testShipmentRequest, authToken.AccessToken);
+                    //Console.WriteLine($"Test API result status: {testResult?.Status}");
+                }
             }
         }
     }
@@ -252,7 +292,10 @@ class Program
             {
                 Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
                 Code = "USID1",
-                Name = "Nampa Specialty Fulfillment Center",
+                Address1 = "Specialty Fulfillment Center Swedish Match 3 - 17th Avenue South",
+                Zip = "83651",
+                City = "Nampa",
+                Name = "Specialty Fulfillment Center",
                 Country = "US"
             },
             ScanningPoint = new InextoScanningPoint
@@ -272,7 +315,6 @@ class Program
                         Country = order.ShipTo.Country ?? "US",
                         Address1 = "1021 E CARY ST, SUITE 1600",
                         City = "RICHMOND",
-                        State = order.ShipTo.State,
                         Zip = "23219"
                     }
                 }
@@ -292,7 +334,7 @@ class Program
             {
                 new InextoProperty
                 {
-                    Key = "urn:inexto:core:mda:destinationType",
+                    Key = "urn:inexto:core:mda:destinationType", //not needed unless we have DynFo code?
                     Value = "2"
                 },
                 new InextoProperty

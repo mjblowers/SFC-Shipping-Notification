@@ -11,7 +11,7 @@ public class InextoShipmentRequest
     public string Key { get; set; }
 
     [JsonPropertyName("eventDateTime")]
-    public DateTime EventDateTime { get; set; }
+    public DateTimeOffset EventDateTime { get; set; }
 
     [JsonPropertyName("comment")]
     public string Comment { get; set; }
