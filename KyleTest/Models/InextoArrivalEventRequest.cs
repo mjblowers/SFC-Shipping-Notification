@@ -1,12 +1,10 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace KyleTest.Models;
 
-public class InextoShipmentRequest
+public class InextoArrivalEventRequest
 {
-    [JsonPropertyName("customerIdentifier")]
-    public int CustomerIdentifier { get; set; }
-
     [JsonPropertyName("transmissionUid")]
     public string TransmissionUid { get; set; }
 
@@ -16,11 +14,14 @@ public class InextoShipmentRequest
     [JsonPropertyName("eventDateTime")]
     public DateTimeOffset EventDateTime { get; set; }
 
+    [JsonPropertyName("isReturned")]
+    public bool IsReturned { get; set; }
+
     //[JsonPropertyName("comment")]
     //public string Comment { get; set; }
 
-    [JsonPropertyName("properties")]
-    public InextoProperty[] Properties { get; set; }
+    //[JsonPropertyName("properties")]
+    //public InextoProperty[] Properties { get; set; }
 
     //[JsonPropertyName("coordinates")]
     //public InextoCoordinates Coordinates { get; set; }
@@ -33,9 +34,6 @@ public class InextoShipmentRequest
 
     [JsonPropertyName("scanningPoint")]
     public InextoScanningPoint ScanningPoint { get; set; }
-
-    [JsonPropertyName("businessEntities")]
-    public InextoBusinessEntityWithRelation[] BusinessEntities { get; set; }
 
     [JsonPropertyName("items")]
     public InextoItem[] Items { get; set; }

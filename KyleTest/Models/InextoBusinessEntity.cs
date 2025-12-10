@@ -16,8 +16,8 @@ public class InextoBusinessEntity
     [JsonPropertyName("country")]
     public string Country { get; set; }
 
-    [JsonPropertyName("properties")]
-    public InextoProperty[] Properties { get; set; }
+    //[JsonPropertyName("properties")]
+    //public InextoProperty[] Properties { get; set; }
     
     [JsonPropertyName("address1")]
     public string Address1 { get; set; }

@@ -43,7 +43,7 @@ class Program
                     Console.WriteLine($"  Description: {receiver.Description}");
                     Console.WriteLine($"  Status: {receiver.ReadOnly?.Status}");
                     Console.WriteLine($"  Is Closed: {receiver.ReadOnly?.IsClosed}");
-                    Console.WriteLine($"  Ship From: {receiver.ShipFrom?.CompanyName} - {receiver.ShipFrom?.City}, {receiver.ShipFrom?.State}");
+                    //Console.WriteLine($"  Ship From: {receiver.ShipFrom?.CompanyName} - {receiver.ShipFrom?.City}, {receiver.ShipFrom?.State}");
 
                     var receiverItems = receiver.Embedded?.ReceiverItems;
                     if (receiverItems?.Any() == true)
@@ -56,6 +56,15 @@ class Program
                     }
                 }
             }
+
+            foreach (var receiver in receiversResponse.Receivers)
+            {
+                var arrivalEventRequest = MapReceiverToArrivalEventRequest(receiver);
+                if (arrivalEventRequest.Items == null || arrivalEventRequest.Items.Length == 0) continue;
+
+                var result = await inextoService.SendArrivalEventAsync(arrivalEventRequest, authToken.AccessToken);
+                Console.WriteLine($"Receiver {receiver.ReadOnly?.ReceiverId} INEXTO Arrival API result status: {result?.Status}");
+            }
         }
         // Get orders
         if (!amReceiving)
@@ -63,7 +72,7 @@ class Program
             var ordersResponse = await orderService.GetOrdersAsync(authToken.AccessToken);
             Console.WriteLine($"Retrieved {ordersResponse?.Orders?.Count ?? 0} orders");
 
-            // Display some order details for verification
+            // Display some order details for verification, routinginfo pickup date
             if (ordersResponse?.Orders?.Any() == true)
             {
                 foreach (var order in ordersResponse.Orders.Take(3))
@@ -74,7 +83,7 @@ class Program
                     Console.WriteLine($"  Description: {order.Description}");
                     Console.WriteLine($"  Status: {order.ReadOnly?.Status}");
                     Console.WriteLine($"  Is Closed: {order.ReadOnly?.IsClosed}");
-                    Console.WriteLine($"  Ship To: {order.ShipTo?.CompanyName} - {order.ShipTo?.City}, {order.ShipTo?.State}");
+                    //Console.WriteLine($"  Ship To: {order.ShipTo?.CompanyName} - {order.ShipTo?.City}, {order.ShipTo?.State}");
 
                     var orderItems = order.Embedded?.OrderItems;
                     if (orderItems?.Any() == true)
@@ -97,17 +106,22 @@ class Program
                     }
                     var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
 
-                    var dateTimeNow = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, mountainTimeZone);
+                    var dateTimeNow = TimeZoneInfo.ConvertTime(order.ReadOnly.ProcessDate.Value, mountainTimeZone);
 
-                    var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");
+                    var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");//dont want the dashes in the 
+
+                    var testdatetime = order.ReadOnly.ProcessDate.Value;
+                    var testdatetimestring = testdatetime;
                     var eventUid = "WMS" + Guid.NewGuid().ToString();
                     // Hardcoded dummy InextoShipmentRequest for API testing
                     var testShipmentRequest = new InextoShipmentRequest
                     {
+                        //CustomerIdentifier = order.CustomerIdentifier,
                         TransmissionUid = $"WMSPNSUS" + eventUid,
+                        //GET THE WMS time when the shipment time actually happens
                         Key = $"urn:inexto:id:evt:tobacco:std:SHIPMENT.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.1BL0238617",
                         EventDateTime = dateTimeNow,
-                        Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.1BL0238617" },
+                        Documents = new[] { $"urn:inexto:tobacco:doc:dn:uid:SMDFO.1BL0238617" },//this will change for every order !BL0238617 Swedish match order number
                         ScanningLocation = new InextoBusinessEntity
                         {
                             Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
@@ -133,13 +147,13 @@ class Program
                 new InextoBusinessEntityWithRelation
                 {
                     Relation = "destination",
-                    Keys = new[] { "urn:inexto:tobacco:be:sc:SMDNFO.002290001" },
-                    Code = "002290001",
-                    Name = "SWEDISH MATCH NORTH AMERICA LLC",
-                    Country = "US",
-                    Address1 = "1021 EAST CARY STREET, SUITE 1600",
-                    City = "RICHMOND",
-                    Zip = "23219"
+                    Keys = new[] { "urn:inexto:tobacco:be:sc:SMDFO.002290001" },
+                    Code = order.CustomerIdentifier.ToString(),
+                    Name = order.ShipTo.Name, //check if this populates
+                    Country = order.ShipTo.Country,
+                    Address1 = order.ShipTo.Address1,
+                    City = order.ShipTo.City,
+                    Zip = order.ShipTo.Zip
                 },
                 new InextoBusinessEntityWithRelation
                     {
@@ -168,8 +182,8 @@ class Program
                 },
                 new InextoProperty
                 {
-                    Key = "urn:inexto:core:mda:eventDateTime",
-                    Value = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:sszzz")
+                    Key = "urn:inexto:tobacco:backward:eventuid",
+                    Value = $"{testdatetimestring}.WMSPNSUS.1BL0238617" //needs to be less than 40 characters no dashes , delete the offset from up above
                 }
             }
                     };
@@ -363,5 +377,51 @@ class Program
         var handler = new HttpClientHandler();
         handler.ClientCertificates.Add(cert);
         return new HttpClient(handler) { BaseAddress = new Uri("https://pmiqas-api.inextrack.biz/") };
+    }
+
+    private static InextoArrivalEventRequest MapReceiverToArrivalEventRequest(Receiver receiver)
+    {
+        var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
+        var utcNow = DateTime.UtcNow;
+        var mountainOffset = mountainTimeZone.GetUtcOffset(utcNow);
+        var mountainDateTimeOffset = new DateTimeOffset(utcNow, TimeSpan.Zero).ToOffset(mountainOffset);
+        var eventKey = $"urn:inexto:id:evt:tobacco:std:Arrival.ADD.{mountainDateTimeOffset:yyyyMMdd-HHmmsszzz}.wms001.WMSLOC001";
+
+        return new InextoArrivalEventRequest
+        {
+            TransmissionUid = Guid.NewGuid().ToString(),
+            Key = eventKey,
+            EventDateTime = mountainDateTimeOffset,
+            IsReturned = false, // or true if you detect a return
+            //Comment = $"Arrival for receiver {receiver.ReadOnly?.ReceiverId}",
+            //Properties = new[]
+            //{
+            //    new InextoProperty
+            //    {
+            //        Key = "urn:inexto:core:mda:eventDateTime",
+            //        Value = mountainDateTimeOffset.ToString("yyyy-MM-ddTHH:mm:sszzz")
+            //    }
+            //},
+            Documents = new[]
+            {
+                $"urn:inexto:tobacco:doc:dn:uid:RECEIVER.{receiver.ReadOnly?.ReceiverId}"
+            },
+            ScanningLocation = new InextoBusinessEntity
+            {
+                Keys = new[] { "urn:inexto:tobacco:be:sc:wms.scanning_location" },
+                Code = "WMS_LOC",
+                Name = "WMS Scanning Location",
+                Country = "US"
+            },
+            ScanningPoint = new InextoScanningPoint
+            {
+                Code = "SP001",
+                Description = "Primary scanning point"
+            },
+            Items = receiver.Embedded?.ReceiverItems?.Select(item => new InextoItem
+            {
+                MachineReadableCode = $"01{item.ItemIdentifier?.Sku ?? "unknown"}21{mountainDateTimeOffset:yyMMdd}"
+            }).ToArray()
+        };
     }
 }

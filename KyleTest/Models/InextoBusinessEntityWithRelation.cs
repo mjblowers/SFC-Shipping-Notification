@@ -13,8 +13,8 @@ public class InextoBusinessEntityWithRelation : InextoBusinessEntity
     [JsonPropertyName("city")]
     public string City { get; set; }
 
-    [JsonPropertyName("state")]
-    public string State { get; set; }
+    //[JsonPropertyName("state")]
+    //public string State { get; set; }
 
     [JsonPropertyName("zip")]
     public string Zip { get; set; }

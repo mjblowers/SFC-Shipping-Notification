@@ -4,6 +4,9 @@ namespace KyleTest.Models;
 
 public class Order
 {
+    [JsonPropertyName("customerIdentifier")]
+    public int CustomerIdentifier { get; set; }
+
     [JsonPropertyName("readOnly")]
     public ReadOnlyOrderData ReadOnly { get; set; }
 

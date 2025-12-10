@@ -30,4 +30,21 @@ public class InextoApiService : IInextoApiService
 
         return JsonSerializer.Deserialize<InextoShipmentResponse>(jsonResponse, options);
     }
+
+    public async Task<InextoShipmentResponse> SendArrivalEventAsync(InextoArrivalEventRequest request, string accessToken)
+    {
+        _inextoClient.DefaultRequestHeaders.Clear();
+        var endpoint = "standard/event/arrivalEvent?Subscription-Key=a754b9e5ee024362b5cc4c52c54e3c72";
+        var response = await _inextoClient.PostAsJsonAsync(endpoint, request);
+        response.EnsureSuccessStatusCode();
+
+        var jsonResponse = await response.Content.ReadAsStringAsync();
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        return JsonSerializer.Deserialize<InextoShipmentResponse>(jsonResponse, options);
+    }
 }

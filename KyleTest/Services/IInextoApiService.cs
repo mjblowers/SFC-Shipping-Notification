@@ -6,4 +6,5 @@ namespace KyleTest.Services;
 public interface IInextoApiService
 {
     Task<InextoShipmentResponse> SendShipmentEventAsync(InextoShipmentRequest request, string accessToken);
+    Task<InextoShipmentResponse> SendArrivalEventAsync(InextoArrivalEventRequest request, string accessToken);
 }
