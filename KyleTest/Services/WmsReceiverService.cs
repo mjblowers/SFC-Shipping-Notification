@@ -32,16 +32,12 @@ public class WmsReceiverService : IWmsReceiverService
         var queryParams = new[]
         {
             "pgsiz=1",
-            "pgnum=1",
+            "pgnum=100",
             "detail=All",
             "itemdetail=All"
         };
-        //var queryParams = new[]
-        //{
-        //    "receiver_id=100",
-        //};
 
-        var endpoint = "inventory/receivers?" + string.Join("&", queryParams);
+        var endpoint = "inventory/receivers?rql=ReadOnly.CustomerIdentifier.id==123&" + string.Join("&", queryParams);
 
         var response = await _receiverClient.GetAsync(endpoint);
         response.EnsureSuccessStatusCode();

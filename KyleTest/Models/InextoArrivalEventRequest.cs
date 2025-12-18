@@ -35,6 +35,11 @@ public class InextoArrivalEventRequest
     [JsonPropertyName("scanningPoint")]
     public InextoScanningPoint ScanningPoint { get; set; }
 
+    [JsonPropertyName("businessEntities")]
+    public InextoBusinessEntityWithRelation[] BusinessEntities { get; set; }
+
     [JsonPropertyName("items")]
     public InextoItem[] Items { get; set; }
+    [JsonPropertyName("properties")]
+    public InextoProperty[] Properties { get; set; }
 }

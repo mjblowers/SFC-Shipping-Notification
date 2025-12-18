@@ -4,9 +4,6 @@ namespace KyleTest.Models;
 
 public class InextoShipmentRequest
 {
-    [JsonPropertyName("customerIdentifier")]
-    public int CustomerIdentifier { get; set; }
-
     [JsonPropertyName("transmissionUid")]
     public string TransmissionUid { get; set; }
 

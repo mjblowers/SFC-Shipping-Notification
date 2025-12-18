@@ -1,6 +1,7 @@
-﻿using System.Security.Cryptography.X509Certificates;
-using KyleTest.Models;
+﻿using KyleTest.Models;
 using KyleTest.Services;
+using System;
+using System.Security.Cryptography.X509Certificates;
 
 class Program
 {
@@ -40,12 +41,10 @@ class Program
                     Console.WriteLine($"\nReceiver Details:");
                     Console.WriteLine($"  Receiver ID: {receiver.ReadOnly?.ReceiverId}");
                     Console.WriteLine($"  Reference: {receiver.ReferenceNum}");
-                    Console.WriteLine($"  Description: {receiver.Description}");
                     Console.WriteLine($"  Status: {receiver.ReadOnly?.Status}");
-                    Console.WriteLine($"  Is Closed: {receiver.ReadOnly?.IsClosed}");
                     //Console.WriteLine($"  Ship From: {receiver.ShipFrom?.CompanyName} - {receiver.ShipFrom?.City}, {receiver.ShipFrom?.State}");
 
-                    var receiverItems = receiver.Embedded?.ReceiverItems;
+                    var receiverItems = receiver.ReceiveItems;
                     if (receiverItems?.Any() == true)
                     {
                         Console.WriteLine($"  Receiver Items ({receiverItems.Count}):");
@@ -109,6 +108,7 @@ class Program
                     var dateTimeNow = TimeZoneInfo.ConvertTime(order.ReadOnly.ProcessDate.Value, mountainTimeZone);
 
                     var dateTimeNowString = dateTimeNow.ToString("yyyyMMdd-HHmmsszzz");//dont want the dashes in the 
+                    var dateTimeNowString2 = dateTimeNow.ToString("yyyyMMdd-HHmmss");//dont want the dashes in the 
 
                     var testdatetime = order.ReadOnly.ProcessDate.Value;
                     var testdatetimestring = testdatetime;
@@ -183,7 +183,7 @@ class Program
                 new InextoProperty
                 {
                     Key = "urn:inexto:tobacco:backward:eventuid",
-                    Value = $"{testdatetimestring}.WMSPNSUS.1BL0238617" //needs to be less than 40 characters no dashes , delete the offset from up above
+                    Value = $"{dateTimeNowString2}.WMSPNSUS.1BL0238617" //needs to be less than 40 characters no dashes , delete the offset from up above
                 }
             }
                     };
@@ -383,45 +383,74 @@ class Program
     {
         var mountainTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Mountain Standard Time");
         var utcNow = DateTime.UtcNow;
-        var mountainOffset = mountainTimeZone.GetUtcOffset(utcNow);
-        var mountainDateTimeOffset = new DateTimeOffset(utcNow, TimeSpan.Zero).ToOffset(mountainOffset);
-        var eventKey = $"urn:inexto:id:evt:tobacco:std:Arrival.ADD.{mountainDateTimeOffset:yyyyMMdd-HHmmsszzz}.wms001.WMSLOC001";
+        var mountainDateTimeOffset = new DateTimeOffset(utcNow, TimeSpan.Zero).ToOffset(mountainTimeZone.GetUtcOffset(utcNow));
+        var dateTimeNowString = mountainDateTimeOffset.ToString("yyyyMMdd-HHmmsszzz");
+        var dateTimeNowString2 = mountainDateTimeOffset.ToString("yyyyMMdd-HHmmss");
+        var eventUid = "WMS" + Guid.NewGuid().ToString();
 
+        // Example hardcoded order number for document and key
+        var orderNumber = "1BL1000101";
+        //for return message should be true
         return new InextoArrivalEventRequest
         {
-            TransmissionUid = Guid.NewGuid().ToString(),
-            Key = eventKey,
+            TransmissionUid = $"WMSPNSUS{eventUid}",
+            Key = $"urn:inexto:id:evt:tobacco:std:Receipt.ADD.{dateTimeNowString}.WMSPNSUS.USID1.SMDFO.{orderNumber}",
             EventDateTime = mountainDateTimeOffset,
-            IsReturned = false, // or true if you detect a return
-            //Comment = $"Arrival for receiver {receiver.ReadOnly?.ReceiverId}",
-            //Properties = new[]
-            //{
-            //    new InextoProperty
-            //    {
-            //        Key = "urn:inexto:core:mda:eventDateTime",
-            //        Value = mountainDateTimeOffset.ToString("yyyy-MM-ddTHH:mm:sszzz")
-            //    }
-            //},
+            IsReturned = true,
             Documents = new[]
             {
-                $"urn:inexto:tobacco:doc:dn:uid:RECEIVER.{receiver.ReadOnly?.ReceiverId}"
+                $"urn:inexto:tobacco:doc:dn:uid:SMDFO.{orderNumber}"
             },
             ScanningLocation = new InextoBusinessEntity
             {
-                Keys = new[] { "urn:inexto:tobacco:be:sc:wms.scanning_location" },
-                Code = "WMS_LOC",
-                Name = "WMS Scanning Location",
-                Country = "US"
+                Keys = new[] { "urn:inexto:tobacco:be:sc:WMSPNSUS.USID1" },
+                Code = "USID1",
+                Name = "Specialty Fulfillment Center",
+                Country = "US",
+                Address1 = "Specialty Fulfillment Center Swedish Match 3 - 17th Avenue South",
+                Zip = "83651",
+                City = "Nampa"
+                //        Properties = new[]
+                //        {
+                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eueoid", Value = "EO0000001" },
+                //    new InextoProperty { Key = "urn:inexto:tobacco:be:eufid", Value = "FI0000001" }
+                //}
+            },
+            Items = new[]
+                    {
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164101240NP000240.0010U2-0024001" },
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164103240NP000240.0010U2-0024001" },
+                new InextoItem { MachineReadableCode = "01006092499075232100250813U201164104240NP000240.0010U2-0024001" }
             },
             ScanningPoint = new InextoScanningPoint
             {
-                Code = "SP001",
-                Description = "Primary scanning point"
+                Code = "USID1",
+                Description = "Nampa Specialty Fulfillment Center"
             },
-            Items = receiver.Embedded?.ReceiverItems?.Select(item => new InextoItem
+            BusinessEntities = new[]
+                        {
+                new InextoBusinessEntityWithRelation
+                {
+                    Relation = "stockowner",
+                    Keys = new[] { "urn:inexto:tobacco:be:sc:SMDFO.NA01" },
+                    Code = "NA01",
+                    Name = "Swedish Match North America LLC", //check if this populates
+                    Country = "US",
+                    Address1 = "1021 E Cary St, Suite 1600",
+                    City = "RICHMOND",
+                    Zip = "23219"
+                },
+            },
+            Properties = new[]
             {
-                MachineReadableCode = $"01{item.ItemIdentifier?.Sku ?? "unknown"}21{mountainDateTimeOffset:yyMMdd}"
-            }).ToArray()
+                new InextoProperty
+                {
+                    //Key = "urn:inexto:core:mda:eventDateTime",
+                    //Value = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:sszzz") //use transaction uid w/ timezone -7
+                    Key = $"urn:inexto:tobacco:backward:eventuid",
+                    Value = $"{dateTimeNowString2}.WMSPNSUS.{orderNumber}"
+                }
+            },
         };
     }
 }
